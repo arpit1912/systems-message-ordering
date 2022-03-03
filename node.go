@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 	"math/rand"
+	"strconv"
 )
 const (
         SERVER_HOST = "localhost"
@@ -15,6 +16,7 @@ const (
 
 type SafeConnections struct {
 	mu sync.Mutex
+	clock int
 	all_conn map[string] net.Conn
 }
 
@@ -50,43 +52,26 @@ func RecieveMessage (wg *sync.WaitGroup, port string) {
 		safeConnections.mu.Lock()
 		safeConnections.all_conn[id] = client_conn
 		safeConnections.mu.Unlock()
-		go listenClient(client_conn)
+		go listenClient(client_conn, id)
 
 	}
 
 }
 
-func listenClient(connection net.Conn) {
+func listenClient(connection net.Conn, id string) {
 	for {
 		buffer := make([]byte, 1024)
 		mLen, err := connection.Read(buffer)
 		if err != nil {
 				fmt.Println("Error reading:", err.Error())
+				delete(safeConnections.all_conn, id);
+				break
 		}
-		fmt.Println("MSG RECEIVED:= ", string(buffer[:mLen]))
+		fmt.Println("MSG RECEIVED:= ", string(buffer[:mLen]), " ", strconv.Itoa(safeConnections.clock))
+		safeConnections.clock++;
 	}
 	
 }
-
-
-
-// func SendMessage(wg *sync.WaitGroup, clients_port []string) {
-// 	defer wg.Done()
-// 	for {
-// 			fmt.Println("Sending message to the other nodes")
-// 			for _, port := range(clients_port) {
-// 				conn, err := net.Dial(SERVER_TYPE, SERVER_HOST+":"+port)
-// 				if err != nil {
-// 						fmt.Println("Error occured in connection: ")
-// 				} else {
-// 					go BroadCastMessage(conn)
-// 				}
-				
-// 			}
-// 		r := rand.Intn(5)
-// 		time.Sleep(time.Duration(r) * time.Second)		
-// 	}
-// }
 
 func establishConnections(wg *sync.WaitGroup, clients_port []string, my_port string) {
 	defer wg.Done()
@@ -104,13 +89,13 @@ func establishConnections(wg *sync.WaitGroup, clients_port []string, my_port str
 			} else {
 				conn, err := net.Dial(SERVER_TYPE, SERVER_HOST+":"+port)
 				if err != nil {
-					fmt.Println("Error occured in connection: ")
+					fmt.Println("Error occured in connection with port: ", port)
 				} else {
 					safeConnections.mu.Lock()
 					safeConnections.all_conn[port] = conn
 					safeConnections.mu.Unlock()
 					_, err = conn.Write([]byte(my_port)) 
-					go listenClient(conn)
+					go listenClient(conn, port)
 					if err != nil {
 						panic("Error sending message ;( ")
 					}
@@ -131,11 +116,10 @@ func BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 	// defer connection.Close()
 	defer wg.Done()
 	fmt.Println("TRYING TO BROADCAST")
-
-
 	for {
 		for v, conn := range safeConnections.all_conn {
-			fmt.Println("Sending Message to -" , v)
+			fmt.Println("Sending Message to -" , v, " ", strconv.Itoa(safeConnections.clock))
+			safeConnections.clock++;
 			msg := "MSG FROM - " + my_port
 			_, err := conn.Write([]byte(msg))
 			if err != nil {
@@ -151,28 +135,12 @@ func BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 func main() {
 	var wg sync.WaitGroup
 	wg.Add(3)
-	safeConnections = SafeConnections{all_conn : make(map[string] net.Conn)}
+	safeConnections = SafeConnections{all_conn : make(map[string] net.Conn), clock : 0}
 	
 	go RecieveMessage(&wg, os.Args[1])
 	time.Sleep(5*time.Second)
-	clients_port := os.Args[2:]
-	go establishConnections(&wg, clients_port, os.Args[1])
+	go establishConnections(&wg, os.Args[2:], os.Args[1])
+	time.Sleep(5*time.Second)
 	go BroadCastMessage(&wg, os.Args[1])
-	// go SendMessage(&wg, clients_port)
 	wg.Wait()
 }
-
-// // socket-client project main.go
-// package main
-// import (
-//         "fmt"
-//         "net"
-// )
-// const (
-//         SERVER_HOST = "localhost"
-//         SERVER_PORT = "9988"
-//         SERVER_TYPE = "tcp"
-// )
-// func main() {
-
-// }
