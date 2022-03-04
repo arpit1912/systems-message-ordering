@@ -79,8 +79,6 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 	for {
 		buffer := make([]byte, 1024)
 		mLen, err := connection.Read(buffer)
-		delayTime(0,10)
-
 		if err != nil {
 				fmt.Println("Error reading:", err.Error())
 				delete(node.all_conn, id);
@@ -103,9 +101,10 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 					fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
 				} else {
 					fmt.Println("Removing from queue : ", message, " Server Clock: ", node.clock)
+					node.clock[client_port-80]++;
 				}
 			}
-			copy(node.message_queue, temp_queue)
+			node.message_queue = temp_queue
 		}
 
 	}
@@ -159,16 +158,20 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 			fmt.Println("Sending Message to - " , v, " Server Clock: ", node.clock)
 			clock := node.clock[node.ClockIndex(my_port)]
 			msg := "MSG FROM : " + my_port + ": Seq Number : " + strconv.Itoa(clock)
-			_, err := conn.Write([]byte(msg))
-			if err != nil {
-				panic("Error sending message ;( ")
-			}
+			go node.SendMessage(conn, msg)
 		}
-		delayTime(0,2)		
+		delayTime(0,10)		
 	}
 	
 }
 
+func (node *Node) SendMessage(conn net.Conn, message string) {
+	delayTime(0,10)
+	_, err := conn.Write([]byte(message))
+	if err != nil {
+		panic("Error sending message ;( ")
+	}
+}
 func main() {
 	
 	var wg sync.WaitGroup
