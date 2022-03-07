@@ -1,4 +1,3 @@
-// socket-server project main.go
 package main
 import (
 	"fmt"
