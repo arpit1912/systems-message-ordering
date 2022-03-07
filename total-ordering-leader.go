@@ -83,10 +83,9 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				delete(node.all_conn, id);
 				break
 		}
-		
 		node.seq_number++;
-		fmt.Println("Message Received : ", string(buffer[:mLen]), " Global Seq Number: ", node.seq_number)
 		msg:= "Seq number: " + strconv.Itoa(node.seq_number) + " : " + string(buffer[:mLen])
+		fmt.Println("Message Received : ", string(buffer[:mLen]), " Global Seq Number: ", node.seq_number)
 		node.BroadCastMessage(msg)
 	}
 	
@@ -100,20 +99,19 @@ func (node *Node) BroadCastMessage(message string) {
 		// 	continue
 		// }
 		fmt.Println("Sending Message to - " , port, " Seq_Number: ", node.seq_number)
-		go node.SendMessage(conn, message)
+		node.SendMessage(conn, message)
 	}	
 	
 }
 
 func (node *Node) SendMessage(conn net.Conn, message string) {
-	delayAgent(10,11)
 	_, err := conn.Write([]byte(message))
 	if err != nil {
 		panic("Error sending message ;( ")
 	}
 }
 func main() {
-	
+	rand.Seed(time.Now().UnixNano())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	node := Node{all_conn : make(map[string] net.Conn),  server_port : os.Args[1]}
