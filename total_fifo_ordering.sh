@@ -14,7 +14,7 @@ done
 
 
 LEADER_PORT=8080
-gnome-terminal -e "go run total-ordering-leader.go $LEADER_PORT" &
+gnome-terminal -e "go run total-fifo-ordering-leader.go $LEADER_PORT $1" &
 
 for i in "${ports[@]}"; do
     other_ports="$LEADER_PORT"
