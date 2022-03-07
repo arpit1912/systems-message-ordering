@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"encoding/json"
 )
 const (
         SERVER_HOST = "localhost"
@@ -28,11 +29,15 @@ func (node *Node) ClockIndex(port string) int {
 	return val - 80
 }
 
-func parseMessage(message string) (int, int) {
+func parseMessage(message string) (int, []int) {
 	result := strings.Split(message, ":")
 	port, _ := strconv.Atoi(strings.Trim(result[1], " "))
-	timestamp, _ := strconv.Atoi(strings.Trim(result[3], " "))
-	return port, timestamp
+	var vec_clock []int
+	err:= json.Unmarshal([]byte(strings.Trim(result[3], " ")), &vec_clock)
+	if err != nil {
+        fmt.Println("ERROR PARSING")
+    }
+	return port, vec_clock
 }
 
 func (node *Node) RecieveMessage (wg *sync.WaitGroup, port string) {
@@ -85,28 +90,83 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				break
 		}
 		
-		_, timestamp := parseMessage(string(buffer[:mLen]))
+		_, vec_clock := parseMessage(string(buffer[:mLen]))
 		server_timestamp := node.clock[node.ClockIndex(id)]
-		if( server_timestamp + 1 != timestamp) {
-			node.message_queue = append(node.message_queue, string(buffer[:mLen]))
-			fmt.Println("Storing in local queue:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
-		} else {
+
+		is_order_correct := false
+
+		
+		if( server_timestamp + 1 == vec_clock[node.ClockIndex(id)]) {
+			// Message is in FIFO Order
+			// Checking for Causal Ordering
+			temp:= true
+			for i, val := range node.clock {
+				if i == node.ClockIndex(id) {
+					continue
+				}
+				if val < vec_clock[i] {
+					temp =false
+					break
+				}
+
+			}
+			if temp {
+				is_order_correct = true
+			}
+		}
+
+		if is_order_correct {
 			fmt.Println("Message Delivered:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
 			node.clock[node.ClockIndex(id)]++;
 			var temp_queue []string
-			for _, message := range node.message_queue {
-				client_port, timestamp := parseMessage(message)
-				if(node.clock[client_port-80]+1 != timestamp){
-					temp_queue = append(temp_queue, message)
-					fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
-				} else {
-					fmt.Println("Removing from queue : ", message, " Server Clock: ", node.clock)
-					node.clock[client_port-80]++;
+			for {
+				found_once := false
+				for _, message := range node.message_queue {
+					client_port, vec_clock := parseMessage(message)
+					is_order_correct1 := false
+	
+					if( node.clock[client_port-80] + 1 == vec_clock[node.ClockIndex(id)]) {
+						// Message is in FIFO Order
+						// Checking for Causal Ordering
+						temp:= true
+						for i, val := range node.clock {
+							if i == node.ClockIndex(id) {
+								continue
+							}
+							if val < vec_clock[i] {
+								temp =false
+								break
+							}
+			
+						}
+						if temp {
+							is_order_correct1 = true
+						}
+					}
+	
+	
+					if is_order_correct1 {
+						found_once = true
+						fmt.Println("Removing from queue. Message Delivered : ", message, " Server Clock: ", node.clock)
+						node.clock[client_port-80]++;
+					} else {
+						temp_queue = append(temp_queue, message)
+						//fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
+					}
+				}
+				node.message_queue = temp_queue
+				temp_queue = nil
+				if !found_once {
+					break
 				}
 			}
-			node.message_queue = temp_queue
-		}
+			
 
+		} else {
+			node.message_queue = append(node.message_queue, string(buffer[:mLen]))
+			fmt.Println("Storing in local queue:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
+		}
+		
 	}
 	
 }
@@ -154,15 +214,14 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 	fmt.Println("TRYING TO BROADCAST")
 	for i:=0;i<10;i++ {
 		node.clock[node.ClockIndex(my_port)]++;
+		vec_clock, _ := json.Marshal(node.clock)
 		for v, conn := range node.all_conn {
 			fmt.Println("Sending Message to - " , v, " Server Clock: ", node.clock)
-			clock := node.clock[node.ClockIndex(my_port)]
-			msg := "MSG FROM : " + my_port + ": Seq Number : " + strconv.Itoa(clock)
+			msg := "MSG FROM : " + my_port + ": Vec Clock : " + string(vec_clock)
 			go node.SendMessage(conn, msg)
 		}
 		delayTime(0,10)		
 	}
-	
 }
 
 func (node *Node) SendMessage(conn net.Conn, message string) {

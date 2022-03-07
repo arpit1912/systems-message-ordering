@@ -18,9 +18,11 @@ const (
 type Node struct {
 	server_port string
 	mu sync.Mutex
-	clock []int
+	msg_id int
+	seq_number int
 	all_conn map[string] net.Conn
-	message_queue []string
+	message_queue map[string] string
+	leader_port string
 }
 // MSG RECEIVED:=  MSG FROM - 81 : Seq Number : 1
 func (node *Node) ClockIndex(port string) int {
@@ -28,11 +30,19 @@ func (node *Node) ClockIndex(port string) int {
 	return val - 80
 }
 
-func parseMessage(message string) (int, int) {
+func parseMessage(message string) (string, string, int) {
 	result := strings.Split(message, ":")
-	port, _ := strconv.Atoi(strings.Trim(result[1], " "))
-	timestamp, _ := strconv.Atoi(strings.Trim(result[3], " "))
-	return port, timestamp
+	seq_number, _ := strconv.Atoi(strings.Trim(result[1], " "))
+	port := strings.Trim(result[3], " ")
+	msg_id := strings.Trim(result[5], " ")
+	return port+"-"+ msg_id, port, seq_number
+}
+
+func generate_hash(message string) (string) {
+	result := strings.Split(message, ":")
+	port := strings.Trim(result[1], " ")
+	msg_id := strings.Trim(result[3], " ")
+	return port+"-"+msg_id
 }
 
 func (node *Node) RecieveMessage (wg *sync.WaitGroup, port string) {
@@ -70,7 +80,7 @@ func (node *Node) RecieveMessage (wg *sync.WaitGroup, port string) {
 
 }
 
-func delayTime(min int, max int) {
+func delayAgent(min int, max int) {
 	r := rand.Intn(max-min) + min
 	time.Sleep(time.Duration(r) * time.Second)
 }
@@ -84,28 +94,28 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				delete(node.all_conn, id);
 				break
 		}
-		
-		_, timestamp := parseMessage(string(buffer[:mLen]))
-		server_timestamp := node.clock[node.ClockIndex(id)]
-		if( server_timestamp + 1 != timestamp) {
-			node.message_queue = append(node.message_queue, string(buffer[:mLen]))
-			fmt.Println("Storing in local queue:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
-		} else {
-			fmt.Println("Message Delivered:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
-			node.clock[node.ClockIndex(id)]++;
-			var temp_queue []string
-			for _, message := range node.message_queue {
-				client_port, timestamp := parseMessage(message)
-				if(node.clock[client_port-80]+1 != timestamp){
-					temp_queue = append(temp_queue, message)
-					fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
-				} else {
-					fmt.Println("Removing from queue : ", message, " Server Clock: ", node.clock)
-					node.clock[client_port-80]++;
+		if id == node.leader_port {
+			fmt.Println("Message received from leader: ", string(buffer[:mLen]), ". Local Seq Number: ", node.seq_number)
+			hash_key, port, seq_number := parseMessage(string(buffer[:mLen]))
+			if port == node.server_port {
+				node.seq_number++;
+			} else {
+				fmt.Println(hash_key, seq_number)
+				if (node.seq_number + 1 == seq_number) {
+					fmt.Println("Message Delivered:= ", node.message_queue[hash_key])
+					node.seq_number++;
+					delete(node.message_queue, hash_key)
 				}
 			}
-			node.message_queue = temp_queue
+			
+
+		} else {
+			fmt.Println("Storing in local queue:= ", string(buffer[:mLen]), " Local Seq Number: ", node.seq_number)
+			hash_key := generate_hash(string(buffer[:mLen]))
+			node.message_queue[hash_key] =  string(buffer[:mLen])
 		}
+		
+		
 
 	}
 	
@@ -153,20 +163,19 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 	defer wg.Done()
 	fmt.Println("TRYING TO BROADCAST")
 	for i:=0;i<10;i++ {
-		node.clock[node.ClockIndex(my_port)]++;
+		node.msg_id++;
 		for v, conn := range node.all_conn {
-			fmt.Println("Sending Message to - " , v, " Server Clock: ", node.clock)
-			clock := node.clock[node.ClockIndex(my_port)]
-			msg := "MSG FROM : " + my_port + ": Seq Number : " + strconv.Itoa(clock)
+			fmt.Println("Sending Message to - " , v, " Msg_ID: ", node.msg_id)
+			msg := "MSG FROM : " + my_port + ": Message ID : " + strconv.Itoa(node.msg_id)
 			go node.SendMessage(conn, msg)
 		}
-		delayTime(0,10)		
+		delayAgent(0,10)		
 	}
 	
 }
 
 func (node *Node) SendMessage(conn net.Conn, message string) {
-	delayTime(0,10)
+	delayAgent(0,10)
 	_, err := conn.Write([]byte(message))
 	if err != nil {
 		panic("Error sending message ;( ")
@@ -176,8 +185,7 @@ func main() {
 	
 	var wg sync.WaitGroup
 	wg.Add(2)
-	node := Node{all_conn : make(map[string] net.Conn), clock : make([]int, len(os.Args[1:])), server_port : os.Args[1]}
-	fmt.Println(node.clock)
+	node := Node{all_conn : make(map[string] net.Conn),message_queue : make(map[string] string), server_port : os.Args[1], leader_port : os.Args[2]}
 	go node.RecieveMessage(&wg, os.Args[1])
 	node.establishConnections(&wg, os.Args[2:], os.Args[1])
 	go node.BroadCastMessage(&wg, os.Args[1])
