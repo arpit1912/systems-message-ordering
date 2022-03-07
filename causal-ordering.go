@@ -22,6 +22,7 @@ type Node struct {
 	clock []int
 	all_conn map[string] net.Conn
 	message_queue []string
+	delivery_queue []string
 }
 // MSG RECEIVED:=  MSG FROM - 81 : Seq Number : 1
 func (node *Node) ClockIndex(port string) int {
@@ -117,6 +118,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 
 		if is_order_correct {
 			fmt.Println("Message Delivered:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
+			node.delivery_queue = append(node.delivery_queue, string(buffer[:mLen]))
 			node.clock[node.ClockIndex(id)]++;
 			var temp_queue []string
 			for {
@@ -148,6 +150,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 					if is_order_correct1 {
 						found_once = true
 						fmt.Println("Removing from queue. Message Delivered : ", message, " Server Clock: ", node.clock)
+						node.delivery_queue = append(node.delivery_queue, message)
 						node.clock[client_port-8080]++;
 					} else {
 						temp_queue = append(temp_queue, message)
@@ -221,6 +224,11 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 			go node.SendMessage(conn, msg)
 		}
 		delayTime(0,10)		
+	}
+	delayTime(20,21)
+	fmt.Println("PRINTING DELIVERY QUEUE.")
+	for i,v := range(node.delivery_queue) {
+		fmt.Println(i," - ",v)
 	}
 }
 

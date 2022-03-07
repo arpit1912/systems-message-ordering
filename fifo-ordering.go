@@ -21,6 +21,7 @@ type Node struct {
 	clock []int
 	all_conn map[string] net.Conn
 	message_queue []string
+	delivery_queue []string
 }
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
@@ -91,6 +92,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 			fmt.Println("Storing in local queue:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
 		} else {
 			fmt.Println("Message Delivered:= ", string(buffer[:mLen]), " Server Clock: ", node.clock)
+			node.delivery_queue = append(node.delivery_queue, string(buffer[:mLen]))
 			node.clock[node.ClockIndex(id)]++;
 			var temp_queue []string
 			for _, message := range node.message_queue {
@@ -100,6 +102,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 					fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
 				} else {
 					fmt.Println("Removing from queue : ", message, " Server Clock: ", node.clock)
+					node.delivery_queue = append(node.delivery_queue, message)
 					node.clock[client_port-8080]++;
 				}
 			}
@@ -160,7 +163,11 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 		}
 		delayTime(0,10)		
 	}
-	
+	delayTime(20,21)
+	fmt.Println("PRINTING DELIVERY QUEUE.")
+	for i,v := range(node.delivery_queue) {
+		fmt.Println(i," - ",v)
+	}
 }
 
 func (node *Node) SendMessage(conn net.Conn, message string) {

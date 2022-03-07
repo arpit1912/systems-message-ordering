@@ -24,6 +24,7 @@ type Node struct {
 	message_queue map[string] string
 	leader_message_queue map[int] string
 	leader_port string
+	delivery_queue []string
 }
 
 func (node *Node) ClockIndex(port string) int {
@@ -107,13 +108,17 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				if( node.seq_number + 1 == seq_number){
 					if port != node.server_port {
 						fmt.Println("Message Delivered:= ", node.message_queue[hash_key])
+						node.delivery_queue = append(node.delivery_queue, node.message_queue[hash_key])
 						delete(node.message_queue, hash_key)
 					}
 					node.seq_number++;
 					for {
 						if hash_key, found := node.leader_message_queue[node.seq_number + 1]; found {
-							fmt.Println("Message Delivered := ", node.message_queue[hash_key])
-							delete(node.message_queue, hash_key)
+							if _, ok := node.message_queue[hash_key]; ok {
+								fmt.Println("Message Delivered := ", node.message_queue[hash_key])
+								node.delivery_queue = append(node.delivery_queue, node.message_queue[hash_key])
+								delete(node.message_queue, hash_key)
+							}
 							delete(node.leader_message_queue,node.seq_number + 1)
 							node.seq_number++;
 						} else {
@@ -184,6 +189,11 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 			go node.SendMessage(conn, msg, port)
 		}
 		delayAgent(0,10)		
+	}
+	delayAgent(30,31)
+	fmt.Println("PRINTING DELIVERY QUEUE.")
+	for i,v := range(node.delivery_queue) {
+		fmt.Println(i," - ",v)
 	}
 	
 }

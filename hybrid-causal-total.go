@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"encoding/json"
 )
 const (
         SERVER_HOST = "localhost"
@@ -29,7 +30,7 @@ type Node struct {
 
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
-	return val - 80
+	return val - 81
 }
 
 func parseMessage(message string) (string, string, int) {
@@ -130,6 +131,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				fmt.Println("Storing in local queue:= ", message, " Local Seq Number: ", node.seq_number)
 				hash_key := generate_hash(message)
 				node.message_queue[hash_key] =  message
+				node.clock[node.ClockIndex(id)]++
 			}
 		}
 
@@ -179,9 +181,11 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 	fmt.Println("TRYING TO BROADCAST")
 	for i:=0;i<10;i++ {
 		node.msg_id++;
+		node.clock[node.ClockIndex(my_port)]++
+		vec_clock, _ := json.Marshal(node.clock)
 		for port, conn := range node.all_conn {
 			fmt.Println("Sending Message to - " , port, " Msg_ID: ", node.msg_id)
-			msg := "MSG FROM : " + my_port + ": Message ID : " + strconv.Itoa(node.msg_id) + ";"
+			msg := "MSG FROM : " + my_port + ": Message ID : " + strconv.Itoa(node.msg_id) + ": Vec Clock : " + string(vec_clock) + ";"
 			go node.SendMessage(conn, msg, port)
 		}
 		delayAgent(5,10)		
@@ -200,6 +204,7 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	node := Node{all_conn : make(map[string] net.Conn), clock: make([]int, len(os.Args[2:])), message_queue : make(map[string] string),leader_message_queue : make(map[int] string), server_port : os.Args[1], leader_port : os.Args[2]}
+	fmt.Println(node.clock)
 	go node.RecieveMessage(&wg, os.Args[1])
 	node.establishConnections(&wg, os.Args[2:], os.Args[1])
 	go node.BroadCastMessage(&wg, os.Args[1])
