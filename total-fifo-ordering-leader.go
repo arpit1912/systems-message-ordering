@@ -7,6 +7,7 @@ import (
 	"time"
 	"math/rand"
 	"strconv"
+	"strings"
 )
 const (
         SERVER_HOST = "localhost"
@@ -22,6 +23,13 @@ type Node struct {
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
 	return val - 80
+}
+
+func parseMessage(message string) (string) {
+	result := strings.Split(message, ":")
+	port := strings.Trim(result[1], " ")
+	msg_id := strings.Trim(result[3], " ")
+	return port+"-"+msg_id
 }
 
 func (node *Node) RecieveMessage (wg *sync.WaitGroup, port string) {
