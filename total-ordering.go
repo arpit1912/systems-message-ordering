@@ -25,7 +25,7 @@ type Node struct {
 	leader_message_queue map[int] string
 	leader_port string
 }
-// MSG RECEIVED:=  MSG FROM - 81 : Seq Number : 1
+
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
 	return val - 80
@@ -95,37 +95,42 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				delete(node.all_conn, id);
 				break
 		}
-		if id == node.leader_port {
-			fmt.Println("Message received from leader: ", string(buffer[:mLen]), ". Local Seq Number: ", node.seq_number)
-			hash_key, port, seq_number := parseMessage(string(buffer[:mLen]))
-			if( node.seq_number + 1 == seq_number){
-				if port != node.server_port {
-					fmt.Println("Message Delivered:= ", node.message_queue[hash_key])
-					delete(node.message_queue, hash_key)
-				}
-				node.seq_number++;
-				for {
-					if hash_key, found := node.leader_message_queue[node.seq_number + 1]; found {
-						fmt.Println("Message Delivered := ", node.message_queue[hash_key])
-						delete(node.message_queue, hash_key)
-						delete(node.leader_message_queue,node.seq_number + 1)
-						node.seq_number++;
-					} else {
-						break
-					}
-				}
-			} else {
-				fmt.Println("Storing in local leader message queue")
-				node.leader_message_queue[seq_number] = hash_key
+		messages := strings.Split(string(buffer[:mLen]),";")
+		fmt.Println("messages in buffer: ",len(messages))
+		for _, message := range(messages) {
+			if message == ""{
+				continue
 			}
-
-		} else {
-			fmt.Println("Storing in local queue:= ", string(buffer[:mLen]), " Local Seq Number: ", node.seq_number)
-			hash_key := generate_hash(string(buffer[:mLen]))
-			node.message_queue[hash_key] =  string(buffer[:mLen])
+			if id == node.leader_port {
+				fmt.Println("Message received from leader: ", message, ". Local Seq Number: ", node.seq_number)
+				hash_key, port, seq_number := parseMessage(message)
+				if( node.seq_number + 1 == seq_number){
+					if port != node.server_port {
+						fmt.Println("Message Delivered:= ", node.message_queue[hash_key])
+						delete(node.message_queue, hash_key)
+					}
+					node.seq_number++;
+					for {
+						if hash_key, found := node.leader_message_queue[node.seq_number + 1]; found {
+							fmt.Println("Message Delivered := ", node.message_queue[hash_key])
+							delete(node.message_queue, hash_key)
+							delete(node.leader_message_queue,node.seq_number + 1)
+							node.seq_number++;
+						} else {
+							break
+						}
+					}
+				} else {
+					fmt.Println("Storing in local leader message queue")
+					node.leader_message_queue[seq_number] = hash_key
+				}
+	
+			} else {
+				fmt.Println("Storing in local queue:= ", message, " Local Seq Number: ", node.seq_number)
+				hash_key := generate_hash(message)
+				node.message_queue[hash_key] =  message
+			}
 		}
-		
-		
 
 	}
 	
@@ -175,7 +180,7 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 		node.msg_id++;
 		for port, conn := range node.all_conn {
 			fmt.Println("Sending Message to - " , port, " Msg_ID: ", node.msg_id)
-			msg := "MSG FROM : " + my_port + ": Message ID : " + strconv.Itoa(node.msg_id)
+			msg := "MSG FROM : " + my_port + ": Message ID : " + strconv.Itoa(node.msg_id) + ";"
 			go node.SendMessage(conn, msg, port)
 		}
 		delayAgent(5,10)		
@@ -184,18 +189,13 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 }
 
 func (node *Node) SendMessage(conn net.Conn, message string, port string) {
-	if node.leader_port == port{
-		delayAgent(3,10)	
-	}
-	node.mu.Lock()
+	delayAgent(3,10)	
 	_, err := conn.Write([]byte(message))
 	if err != nil {
 		panic("Error sending message ;( ")
 	}
-	node.mu.Unlock()
 }
 func main() {
-	rand.Seed(time.Now().UnixNano())
 	var wg sync.WaitGroup
 	wg.Add(2)
 	node := Node{all_conn : make(map[string] net.Conn),message_queue : make(map[string] string),leader_message_queue : make(map[int] string), server_port : os.Args[1], leader_port : os.Args[2]}

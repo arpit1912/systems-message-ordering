@@ -5,23 +5,19 @@ counter=1
 
 ports=()
 
-port=8081
+port=8080
 while [ $counter -le $1 ]; do
     ports[$counter]=$port 
     ((port++))
     ((counter++))
 done
 
-
-LEADER_PORT=8080
-xterm -e "go run total-ordering-leader.go $LEADER_PORT" &
-
 for i in "${ports[@]}"; do
-    other_ports="$LEADER_PORT"
+    other_ports=""
     for j in "${ports[@]}"; do
         if [ "$j" -ne "$i" ]; then
             other_ports="$other_ports $j"
         fi
     done  
-    xterm -e "go run total-ordering.go $i $other_ports" &
+    gnome-terminal -e "go run fifo-ordering.go $i $other_ports" &
 done

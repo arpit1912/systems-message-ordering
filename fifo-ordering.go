@@ -22,10 +22,9 @@ type Node struct {
 	all_conn map[string] net.Conn
 	message_queue []string
 }
-// MSG RECEIVED:=  MSG FROM - 81 : Seq Number : 1
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
-	return val - 80
+	return val - 8080
 }
 
 func parseMessage(message string) (int, int) {
@@ -96,12 +95,12 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 			var temp_queue []string
 			for _, message := range node.message_queue {
 				client_port, timestamp := parseMessage(message)
-				if(node.clock[client_port-80]+1 != timestamp){
+				if(node.clock[client_port-8080]+1 != timestamp){
 					temp_queue = append(temp_queue, message)
 					fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
 				} else {
 					fmt.Println("Removing from queue : ", message, " Server Clock: ", node.clock)
-					node.clock[client_port-80]++;
+					node.clock[client_port-8080]++;
 				}
 			}
 			node.message_queue = temp_queue
@@ -149,7 +148,6 @@ func (node *Node) establishConnections(wg *sync.WaitGroup, clients_port []string
 }
 
 func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
-	// defer connection.Close()
 	defer wg.Done()
 	fmt.Println("TRYING TO BROADCAST")
 	for i:=0;i<10;i++ {

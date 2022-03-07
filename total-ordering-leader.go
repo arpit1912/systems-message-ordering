@@ -1,4 +1,3 @@
-// socket-server project main.go
 package main
 import (
 	"fmt"
@@ -21,7 +20,6 @@ type Node struct {
 	seq_number int
 	all_conn map[string] net.Conn
 }
-// MSG RECEIVED:=  MSG FROM - 81 : Seq Number : 1
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
 	return val - 80
@@ -83,35 +81,33 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 				delete(node.all_conn, id);
 				break
 		}
+		node.mu.Lock()
 		node.seq_number++;
 		msg:= "Seq number: " + strconv.Itoa(node.seq_number) + " : " + string(buffer[:mLen])
 		fmt.Println("Message Received : ", string(buffer[:mLen]), " Global Seq Number: ", node.seq_number)
-		node.BroadCastMessage(msg)
+		node.mu.Unlock()
+		go node.BroadCastMessage(msg)
 	}
 	
 }
 
 func (node *Node) BroadCastMessage(message string) {
-	// defer connection.Close()
 	fmt.Println("TRYING TO BROADCAST")
 	for port, conn := range node.all_conn {
-		// if port == client_port {
-		// 	continue
-		// }
 		fmt.Println("Sending Message to - " , port, " Seq_Number: ", node.seq_number)
-		node.SendMessage(conn, message)
+		go node.SendMessage(conn, message)
 	}	
 	
 }
 
 func (node *Node) SendMessage(conn net.Conn, message string) {
+	delayAgent(10,15)
 	_, err := conn.Write([]byte(message))
 	if err != nil {
 		panic("Error sending message ;( ")
 	}
 }
 func main() {
-	rand.Seed(time.Now().UnixNano())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	node := Node{all_conn : make(map[string] net.Conn),  server_port : os.Args[1]}

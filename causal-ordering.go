@@ -26,7 +26,7 @@ type Node struct {
 // MSG RECEIVED:=  MSG FROM - 81 : Seq Number : 1
 func (node *Node) ClockIndex(port string) int {
 	val, _ := strconv.Atoi(port)
-	return val - 80
+	return val - 8080
 }
 
 func parseMessage(message string) (int, []int) {
@@ -125,7 +125,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 					client_port, vec_clock := parseMessage(message)
 					is_order_correct1 := false
 	
-					if( node.clock[client_port-80] + 1 == vec_clock[node.ClockIndex(id)]) {
+					if( node.clock[client_port-8080] + 1 == vec_clock[node.ClockIndex(id)]) {
 						// Message is in FIFO Order
 						// Checking for Causal Ordering
 						temp:= true
@@ -148,7 +148,7 @@ func (node *Node) listenClient(connection net.Conn, id string) {
 					if is_order_correct1 {
 						found_once = true
 						fmt.Println("Removing from queue. Message Delivered : ", message, " Server Clock: ", node.clock)
-						node.clock[client_port-80]++;
+						node.clock[client_port-8080]++;
 					} else {
 						temp_queue = append(temp_queue, message)
 						//fmt.Println("Again storing in queue : ", message, " Server Clock: ", node.clock)
