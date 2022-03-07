@@ -183,7 +183,7 @@ func (node *Node) BroadCastMessage(wg *sync.WaitGroup, my_port string) {
 			msg := "MSG FROM : " + my_port + ": Message ID : " + strconv.Itoa(node.msg_id) + ";"
 			go node.SendMessage(conn, msg, port)
 		}
-		delayAgent(5,10)		
+		delayAgent(0,10)		
 	}
 	
 }
